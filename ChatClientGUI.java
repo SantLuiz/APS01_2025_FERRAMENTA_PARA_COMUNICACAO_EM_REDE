@@ -39,7 +39,7 @@ public class ChatClientGUI {
     private void createGUI() {
         frame = new JFrame("Chat - " + userName);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(500, 400);
+        frame.setSize(350, 300);
         frame.setLayout(new BorderLayout());
 
         chatPane = new JTextPane();
