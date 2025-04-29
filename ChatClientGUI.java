@@ -1,112 +1,155 @@
-import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.*;
-import java.net.Socket;
-import java.util.Arrays;
+import java.net.*;
+import java.util.HashMap;
+import java.util.Random;
+import javax.swing.*;
+import javax.swing.text.*;
 
 public class ChatClientGUI {
-
-    private JFrame frame;
-    private JTextArea chatArea;
-    private JTextField inputField;
-    private JButton sendButton;
-    private JList<String> userList;
-    private DefaultListModel<String> listModel;
-
+    private String userName;
     private Socket socket;
-    private BufferedReader in;
-    private PrintWriter out;
-
-    private String username;
+    private BufferedReader reader;
+    private PrintWriter writer;
+    private JFrame frame;
+    private JTextPane chatPane;
+    private StyledDocument doc;
+    private JTextField inputField;
+    private DefaultListModel<String> userListModel;
+    private JList<String> userList;
+    private HashMap<String, Color> userColors;
 
     public ChatClientGUI(String serverAddress, int serverPort) {
-        frame = new JFrame("Chat - Cliente");
-        chatArea = new JTextArea();
-        inputField = new JTextField();
-        sendButton = new JButton("Enviar");
-        listModel = new DefaultListModel<>();
-        userList = new JList<>(listModel);
-
-        chatArea.setEditable(false);
-        chatArea.setLineWrap(true);
-
-        frame.setLayout(new BorderLayout());
-
-        frame.add(new JScrollPane(chatArea), BorderLayout.CENTER);
-
-        JPanel inputPanel = new JPanel(new BorderLayout());
-        inputPanel.add(inputField, BorderLayout.CENTER);
-        inputPanel.add(sendButton, BorderLayout.EAST);
-
-        frame.add(inputPanel, BorderLayout.SOUTH);
-
-        frame.add(new JScrollPane(userList), BorderLayout.EAST);
-        frame.setSize(500, 500);
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setVisible(true);
-
         try {
             socket = new Socket(serverAddress, serverPort);
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new PrintWriter(socket.getOutputStream(), true);
+            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            writer = new PrintWriter(socket.getOutputStream(), true);
 
-            username = JOptionPane.showInputDialog(
-                frame,
-                "Digite seu nome de usuário:",
-                "Login",
-                JOptionPane.PLAIN_MESSAGE
-            );
+            userName = JOptionPane.showInputDialog("Digite seu nome:");
+            writer.println(userName);
 
-            if (username != null && !username.trim().isEmpty()) {
-                out.println(username);
-            } else {
-                username = "Anônimo";
-                out.println(username);
-            }
-
-            // Thread para receber mensagens
-            new Thread(() -> {
-                try {
-                    String line;
-                    while ((line = in.readLine()) != null) {
-                        if (line.startsWith("USERLIST:")) {
-                            updateUserList(line.substring(9));
-                        } else {
-                            chatArea.append(line + "\n");
-                        }
-                    }
-                } catch (IOException e) {
-                    chatArea.append("Erro ao ler do servidor.\n");
-                }
-            }).start();
+            createGUI();
+            startMessageReader();
 
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(frame, "Não foi possível conectar ao servidor.", "Erro", JOptionPane.ERROR_MESSAGE);
-            System.exit(0);
+            e.printStackTrace();
         }
+    }
 
-        sendButton.addActionListener(e -> sendMessage());
+    private void createGUI() {
+        frame = new JFrame("Chat - " + userName);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(500, 400);
+        frame.setLayout(new BorderLayout());
+
+        chatPane = new JTextPane();
+        chatPane.setEditable(false);
+        doc = chatPane.getStyledDocument();
+
+        JScrollPane chatScroll = new JScrollPane(chatPane);
+        frame.add(chatScroll, BorderLayout.CENTER);
+
+        userListModel = new DefaultListModel<>();
+        userList = new JList<>(userListModel);
+        userList.setFixedCellWidth(120);
+        frame.add(new JScrollPane(userList), BorderLayout.EAST);
+
+        inputField = new JTextField();
         inputField.addActionListener(e -> sendMessage());
+        frame.add(inputField, BorderLayout.SOUTH);
+
+        frame.setVisible(true);
+
+        userColors = new HashMap<>();
     }
 
     private void sendMessage() {
         String message = inputField.getText();
         if (!message.trim().isEmpty()) {
-            out.println(message);
+            writer.println(message);
             inputField.setText("");
         }
     }
 
-    private void updateUserList(String users) {
+    private void startMessageReader() {
+        Thread readerThread = new Thread(() -> {
+            try {
+                String message;
+                while ((message = reader.readLine()) != null) {
+                    handleMessage(message);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+        readerThread.start();
+    }
+
+    private void handleMessage(String message) {
+        if (message.startsWith("[USERS]")) {
+            updateUsers(message.substring(7));
+        } else {
+            displayMessage(message);
+        }
+    }
+
+    private void updateUsers(String usersString) {
+        String[] users = usersString.split(",");
+        userListModel.clear();
+        for (String user : users) {
+            user = user.trim();
+            userListModel.addElement(user);
+            if (!userColors.containsKey(user)) {
+                userColors.put(user, randomColor());
+            }
+        }
+    }
+
+    private void displayMessage(String message) {
         SwingUtilities.invokeLater(() -> {
-            listModel.clear();
-            String[] userArray = users.split(",");
-            Arrays.stream(userArray).forEach(listModel::addElement);
+            try {
+                String[] parts = message.split(": ", 2);
+                if (parts.length == 2) {
+                    String user = parts[0].trim();
+                    String text = parts[1].trim();
+                    Color color = userColors.getOrDefault(user, Color.BLACK);
+
+                    SimpleAttributeSet attr = new SimpleAttributeSet();
+                    StyleConstants.setForeground(attr, color);
+                    StyleConstants.setBold(attr, true);
+
+                    doc.insertString(doc.getLength(), user + ": ", attr);
+
+                    SimpleAttributeSet normalAttr = new SimpleAttributeSet();
+                    doc.insertString(doc.getLength(), " (" + getCurrentTimestamp() + ") " + text + " \n" , normalAttr);
+                } else {
+                    // Mensagem de sistema
+                    SimpleAttributeSet systemAttr = new SimpleAttributeSet();
+                    StyleConstants.setItalic(systemAttr, true);
+                    StyleConstants.setForeground(systemAttr, Color.GRAY);
+
+                    doc.insertString(doc.getLength(), message + "\n", systemAttr);
+                }
+                chatPane.setCaretPosition(doc.getLength());
+            } catch (BadLocationException e) {
+                e.printStackTrace();
+            }
         });
     }
 
+    private Color randomColor() {
+        Random rand = new Random();
+        float hue = rand.nextFloat();
+        float saturation = 0.7f;
+        float brightness = 0.9f;
+        return Color.getHSBColor(hue, saturation, brightness);
+    }
+
+    private String getCurrentTimestamp() {
+        return java.time.LocalTime.now().withNano(0).toString();
+    }
+
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new ChatClientGUI("127.0.0.1", 12345));
+        new ChatClientGUI("localhost", 12345);
     }
 }
