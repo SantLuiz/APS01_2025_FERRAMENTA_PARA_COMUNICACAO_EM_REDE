@@ -150,6 +150,24 @@ public class ChatClientGUI {
     }
 
     public static void main(String[] args) {
-        new ChatClientGUI("localhost", 12345);
+        String serverAddress = JOptionPane.showInputDialog(null, "Digite o endereço do servidor:", "Conectar ao Servidor", JOptionPane.QUESTION_MESSAGE);
+        if (serverAddress == null || serverAddress.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(null, "Endereço do servidor não informado. Encerrando.");
+            return;
+        }
+    
+        String portInput = JOptionPane.showInputDialog(null, "Digite a porta do servidor (padrão: 12345):", "Porta do Servidor", JOptionPane.QUESTION_MESSAGE);
+        int serverPort = 12345; // valor padrão
+        try {
+            if (portInput != null && !portInput.trim().isEmpty()) {
+                serverPort = Integer.parseInt(portInput.trim());
+            }
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(null, "Porta inválida. Usando 12345 como padrão.");
+        }
+    
+        new ChatClientGUI(serverAddress.trim(), serverPort);
     }
+    
+    
 }
