@@ -52,6 +52,7 @@ public class ChatServer {
 
                 userName = reader.readLine();
                 userNames.add(userName);
+                System.out.println(userName + " conectado");
                 broadcast("🔔 " + userName + " entrou no chat!");
                 updateUsersList();
 

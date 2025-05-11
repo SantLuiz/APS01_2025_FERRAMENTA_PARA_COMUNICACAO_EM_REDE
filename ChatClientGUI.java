@@ -21,20 +21,50 @@ public class ChatClientGUI {
 
     public ChatClientGUI(String serverAddress, int serverPort) {
         try {
-            socket = new Socket(serverAddress, serverPort);
+            // Configurando um timeout de 10 segundos (10000 ms)
+            socket = new Socket();
+            socket.connect(new InetSocketAddress(serverAddress, serverPort), 10000);  // 10 segundos de timeout
             reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             writer = new PrintWriter(socket.getOutputStream(), true);
-
+    
             userName = JOptionPane.showInputDialog("Digite seu nome:");
+            if (userName == null || userName.trim().isEmpty()) {
+                JOptionPane.showMessageDialog(null, "Nome de usuário não informado. Encerrando.");
+                System.exit(0);
+            }
+    
             writer.println(userName);
-
+    
             createGUI();
             startMessageReader();
-
+    
+        } catch (SocketTimeoutException e) {
+            // Se ocorrer um timeout ao tentar conectar
+            JOptionPane.showMessageDialog(null, 
+                "Erro de Conexão: O tempo limite para conectar ao servidor foi excedido.\nVerifique o endereço e a conexão de rede.", 
+                "Erro de Timeout", 
+                JOptionPane.ERROR_MESSAGE);
+            System.exit(1);  // Encerra o programa
+    
+        } catch (UnknownHostException e) {
+            // Se o endereço IP do servidor não for encontrado
+            JOptionPane.showMessageDialog(null, 
+                "Erro de Conexão: O endereço IP fornecido é inválido ou o servidor não está disponível.", 
+                "Erro de Conexão", 
+                JOptionPane.ERROR_MESSAGE);
+            System.exit(1);  // Encerra o programa
+    
         } catch (IOException e) {
-            e.printStackTrace();
+            // Se ocorrer outro erro de IO (ex: não conseguiu conectar ao servidor)
+            JOptionPane.showMessageDialog(null, 
+                "Erro ao conectar ao servidor:\n" + e.getMessage(), 
+                "Erro de Conexão", 
+                JOptionPane.ERROR_MESSAGE);
+            System.exit(1);  // Encerra o programa
         }
     }
+    
+    
 
     private void createGUI() {
         frame = new JFrame("Chat - " + userName);
